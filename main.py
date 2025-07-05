@@ -4,9 +4,10 @@ from models import PageVisit
 from db import Base, engine, SessionLocal
 from pydantic import BaseModel
 from datetime import datetime
+from processing import clean_content
 
 from embedding import get_embedding
-from vector_store import index, id_map, add_to_vector_store
+from vector_dao import index, id_map, add_to_vector_store
 import numpy as np
 
 Base.metadata.create_all(bind=engine)
@@ -19,6 +20,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+class SearchQuery(BaseModel):
+    q: str
+    k: int = 5
 
 class PageVisitInput(BaseModel):
     url: str
@@ -41,15 +46,18 @@ def store_page(visit: PageVisitInput):
     db.close()
 
     try:
-        embedding = get_embedding(visit.content)
+        cleaned_content = clean_content(visit.content)
+        embedding = get_embedding(cleaned_content)
         add_to_vector_store(visit.url, embedding)
     except Exception as e:
         print("Embedding or FAISS add failed:", e)
 
     return {"status": "stored + embedded"}
 
-@app.get("/semantic_search")
-def semantic_search(q: str, k: int = 5):
+@app.post("/semantic_search")
+def semantic_search(searchQuery: SearchQuery):
+    q = searchQuery.q
+    k = searchQuery.k
     query_vec = np.array(get_embedding(q), dtype='float32').reshape(1, -1)
     D, I = index.search(query_vec, k)
 
@@ -57,6 +65,6 @@ def semantic_search(q: str, k: int = 5):
     for idx in I[0]:
         if idx < len(id_map):
             results.append({"url": id_map[idx]})
-
+    print(results)
     return {"results": results}
 
