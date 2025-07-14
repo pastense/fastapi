@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 from models import PageVisit
 from db import Base, engine, SessionLocal
@@ -65,6 +65,22 @@ def semantic_search(searchQuery: SearchQuery):
     for idx in I[0]:
         if idx < len(id_map):
             results.append({"url": id_map[idx]})
-    print(results)
+    # print(results)
     return {"results": results}
 
+@app.post("/show_results")
+def show_results(urls: list[str] = Body(...)):
+    db = SessionLocal()
+    results = []
+
+    for url in urls:
+        record = db.query(PageVisit).filter_by(url=url).first()
+        if record:
+            results.append({
+                "url": record.url,
+                "title": record.title,
+                "favicon": f"https://www.google.com/s2/favicons?sz=64&domain={record.url}"
+            })
+    
+    db.close()
+    return {"results": results}
