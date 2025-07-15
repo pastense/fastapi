@@ -1,10 +1,13 @@
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from models import PageVisit
-from db import Base, engine, SessionLocal
+from models import PageVisit, User
+from db import Base, engine, SessionLocal, get_db
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from auth import *
 from datetime import datetime
 from processing import clean_content
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 from embedding import get_embedding
 from vector_dao import index, id_map, add_to_vector_store
@@ -20,6 +23,45 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+class RegisterUser(BaseModel):
+    email: str
+    password: str
+
+class PageVisitCreate(BaseModel):
+    url: str
+    title: str
+    visit_time: datetime
+
+@app.post("/register")
+def register(user: RegisterUser, db: Session = Depends(get_db)):
+    hashed = hash_password(user.password)
+    db_user = User(email=user.email, hashed_password=hashed)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.post("/token")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token({"sub": str(user.id)})
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.post("/page_visits")
+def add_page_visit(pv: PageVisitCreate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    user_id = decode_token(token).get("sub")
+    user = db.query(User).get(int(user_id))
+    new_pv = PageVisit(**pv.dict(), owner=user)
+    db.add(new_pv)
+    db.commit()
+    db.refresh(new_pv)
+    return new_pv
+
 
 class SearchQuery(BaseModel):
     q: str
