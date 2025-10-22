@@ -2,10 +2,14 @@ import faiss
 import numpy as np
 import os
 import pickle
+from pathlib import Path
+from pastense_ui import KeyStore
 
+DATA_DIR = Path(KeyStore().path).parent
+# DATA_DIR.mkdir(parents=True, exist_ok=True)
 DIMENSION = 1536
-INDEX_PATH = "faiss.index"
-ID_MAP_PATH = "vector_ids.pkl"
+INDEX_PATH = str (DATA_DIR / "faiss.index")
+ID_MAP_PATH = str(DATA_DIR / "vector_ids.pkl")
 
 # Load or create FAISS index and ID map
 if os.path.exists(INDEX_PATH) and os.path.exists(ID_MAP_PATH):

@@ -5,12 +5,18 @@ from db import Base, engine, SessionLocal
 from pydantic import BaseModel
 from datetime import datetime
 from processing import clean_content
+import logging
+from retrieval import get_favicon
 
 from embedding import get_embedding
 from vector_dao import index, id_map, add_to_vector_store
 import numpy as np
+from pastense_ui import register_ui
+
 
 Base.metadata.create_all(bind=engine)
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -64,7 +70,8 @@ def semantic_search(searchQuery: SearchQuery):
     results = []
     for idx in I[0]:
         if idx < len(id_map):
-            results.append({"url": id_map[idx]})
+            log.info(id_map[idx])
+            results.append({"url": id_map[idx],"favicon":get_favicon(id_map[idx])})
     # print(results)
     return {"results": results}
 
@@ -76,11 +83,14 @@ def show_results(urls: list[str] = Body(...)):
     for url in urls:
         record = db.query(PageVisit).filter_by(url=url).first()
         if record:
+            log.info("123url=",record.url)
             results.append({
                 "url": record.url,
                 "title": record.title,
-                "favicon": f"https://www.google.com/s2/favicons?sz=64&domain={record.url}"
+                "favicon": get_favicon(record.url)
             })
     
     db.close()
     return {"results": results}
+
+register_ui(app, base_url="http://127.0.0.1:8000")

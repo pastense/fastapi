@@ -1,10 +1,10 @@
 import openai
 import os
-from dotenv import load_dotenv
+from pastense_ui import KeyStore
+from pathlib import Path
 
-load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")  # put this in .env
+openai.api_key = str(KeyStore().get("OpenAI"))
 
 def get_embedding(text: str) -> list[float]:
     response = openai.embeddings.create(
